@@ -289,8 +289,13 @@ def seed_admin():
         print("CHANGE THIS PASSWORD IMMEDIATELY.")
 
 
+# Initialize the database when Gunicorn imports app:app on Render.
+# This must be outside the __main__ block because Gunicorn does not
+# execute this file as __main__.
+with app.app_context():
+    db.create_all()
+    seed_admin()
+
+
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
-        seed_admin()
     app.run(debug=True, host="0.0.0.0", port=5000)
