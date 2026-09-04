@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Workers{% endblock %}
+{% block content %}
+<h1>Manage Workers</h1>
+
+<div class="two-col">
+  <form method="POST" class="card-form">
+    <h3>Add New Worker</h3>
+    <label>Full Name</label>
+    <input type="text" name="full_name" required>
+    <label>Employee Code</label>
+    <input type="text" name="employee_code" required>
+    <label>Department</label>
+    <input type="text" name="department">
+    <label>Work Zone</label>
+    <input type="text" name="work_zone" placeholder="e.g. Sulfur Recovery Unit - Zone A">
+    <hr>
+    <label>Login Username</label>
+    <input type="text" name="username" required>
+    <label>Login Password</label>
+    <input type="password" name="password" required>
+    <button type="submit" class="btn btn-primary">Add Worker</button>
+  </form>
+
+  <div>
+    <h3>Current Workers</h3>
+    <table class="data-table">
+      <thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Zone</th></tr></thead>
+      <tbody>
+        {% for w in workers %}
+        <tr>
+          <td>{{ w.employee_code }}</td>
+          <td>{{ w.full_name }}</td>
+          <td>{{ w.department or '—' }}</td>
+          <td>{{ w.work_zone or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4">No workers yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
