@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block title %}Attendance — H2S Monitor{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Shift Attendance</h1>
+    <p class="page-subtitle">Track daily worker check-ins and active shifts for {{ today.strftime('%A, %B %d, %Y') }}.</p>
+  </div>
+  <div style="display: flex; gap: 8px;">
+    <button type="button" id="btn-toggle-qr-kiosk" class="btn btn-primary">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7"></rect>
+        <rect x="14" y="3" width="7" height="7"></rect>
+        <rect x="14" y="14" width="7" height="7"></rect>
+        <rect x="3" y="14" width="7" height="7"></rect>
+      </svg>
+      <span>QR Attendance Kiosk</span>
+    </button>
+  </div>
+</div>
+
+<!-- QR Attendance Scanner Kiosk (Toggable) -->
+<div id="qr-kiosk-panel" class="card qr-kiosk-card" style="display: none; margin-bottom: 24px;">
+  <div class="card-header">
+    <div class="card-header-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+        <circle cx="12" cy="13" r="4"></circle>
+      </svg>
+      <span>QR Badge Scanner Station</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span class="pill-badge pill-calibrated" id="qr-kiosk-status">
+        <span class="pulse-dot"></span> Ready to Scan
+      </span>
+      <button type="button" id="btn-close-qr-kiosk" class="btn btn-sm btn-secondary">Close Kiosk</button>
+    </div>
+  </div>
+
+  <div class="card-body" style="padding: 24px;">
+    <div class="qr-kiosk-layout">
+      <!-- Left: Camera Viewport -->
+      <div class="qr-scanner-box">
+        <div id="qr-reader" style="width: 100%; border-radius: var(--radius-md); overflow: hidden;"></div>
+        <div class="qr-target-guide">
+          <div class="qr-corner top-left"></div>
+          <div class="qr-corner top-right"></div>
+          <div class="qr-corner bottom-left"></div>
+          <div class="qr-corner bottom-right"></div>
+          <div class="qr-scan-line"></div>
+        </div>
+        <div style="margin-top: 10px; font-size: 12px; color: var(--text-muted); text-align: center;">
+          Hold worker QR badge within targeting frame
+        </div>
+      </div>
+
+      <!-- Right: Real-time Live Log & Feedback -->
+      <div class="qr-feedback-side">
+        <div id="qr-scan-success-card" class="qr-success-card" style="display: none;">
+          <div class="qr-success-badge">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </div>
+          <div>
+            <div id="qr-feedback-action" style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--safe-fg); letter-spacing: 0.5px;">CHECK-IN RECORDED</div>
+            <div id="qr-feedback-name" style="font-size: 16px; font-weight: 800; color: var(--text-main); margin-top: 2px;">Marcus Vance</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+              <span id="qr-feedback-code">EMP-101</span> • <span id="qr-feedback-time">08:45 AM</span> • <span id="qr-feedback-dept">Operations</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="qr-idle-guide" class="qr-idle-guide">
+          <div style="font-weight: 700; font-size: 14px; color: var(--text-main); margin-bottom: 6px;">
+            Touchless QR Attendance System
+          </div>
+          <p style="font-size: 12.5px; color: var(--text-muted); line-height: 1.45; margin-bottom: 14px;">
+            Employees present their printed or digital QR pass to the camera. The station automatically detects the employee code and registers their shift timestamp.
+          </p>
+          <div style="background: var(--subtle-bg); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-light); font-size: 12px; color: var(--text-secondary);">
+            <strong>Testing without a badge?</strong> Click <em>"QR Badge"</em> next to any worker below, or enter their code manually:
+            <div style="display: flex; gap: 6px; margin-top: 8px;">
+              <input type="text" id="manual-qr-test-input" placeholder="e.g. EMP-101" class="form-input" style="font-size: 12px; padding: 6px 10px;">
+              <button type="button" id="btn-manual-qr-test" class="btn btn-secondary btn-sm" style="white-space: nowrap;">
+                Test Scan
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div class="card-header-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+        <line x1="16" y1="2" x2="16" y2="6"></line>
+        <line x1="8" y1="2" x2="8" y2="6"></line>
+        <line x1="3" y1="10" x2="21" y2="10"></line>
+      </svg>
+      <span>Shift Attendance Roster</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div class="search-input-wrap">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="tableSearchInput" placeholder="Filter roster..." class="table-search-input">
+      </div>
+      <span class="pill-badge pill-neutral">{{ today.strftime('%b %d, %Y') }}</span>
+    </div>
+  </div>
+  
+  <div class="table-responsive">
+    <table class="clean-table filterable-table">
+      <thead>
+        <tr>
+          <th>Worker</th>
+          <th>Employee Code</th>
+          <th>Sector</th>
+          <th>Status</th>
+          <th>Check-in</th>
+          <th>Check-out</th>
+          <th>Shift Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for w in workers %}
+        {% set rec = records.get(w.id) %}
+        <tr id="attendance-row-{{ w.id }}" data-worker-code="{{ w.employee_code }}">
+          <td>
+            <div class="user-cell">
+              <div class="avatar-circle-sm">
+                {{ w.full_name[:2].upper() }}
+              </div>
+              <div style="font-weight: 600; color: var(--text-main); font-size: 13.5px;">{{ w.full_name }}</div>
+            </div>
+          </td>
+          <td>
+            <code style="background: var(--subtle-bg); padding: 3px 7px; border-radius: 4px; font-size: 12px; font-weight: 600; color: var(--text-main); border: 1px solid var(--border-light);">{{ w.employee_code }}</code>
+          </td>
+          <td>
+            <div style="font-weight: 500;">{{ w.department or 'Operations' }}</div>
+            <div style="font-size: 11px; color: var(--text-muted);">{{ w.work_zone or 'Zone A' }}</div>
+          </td>
+          <td class="col-status">
+            {% if rec and rec.status == 'present' %}
+              <span class="badge badge-safe"><span class="badge-dot"></span> On Duty</span>
+            {% elif rec and rec.status == 'absent' %}
+              <span class="badge badge-high"><span class="badge-dot"></span> Absent</span>
+            {% elif rec and rec.status == 'leave' %}
+              <span class="badge badge-low"><span class="badge-dot"></span> Leave</span>
+            {% else %}
+              <span class="badge" style="background: var(--subtle-bg); color: var(--text-muted); border-color: var(--border-light);">Unmarked</span>
+            {% endif %}
+          </td>
+          <td class="col-checkin">
+            <span style="font-size: 13px;">{{ rec.check_in.strftime('%H:%M') if rec and rec.check_in else '—' }}</span>
+          </td>
+          <td class="col-checkout">
+            <span style="font-size: 13px;">{{ rec.check_out.strftime('%H:%M') if rec and rec.check_out else '—' }}</span>
+          </td>
+          <td>
+            <div style="display: flex; gap: 4px; align-items: center;">
+              <form method="POST" class="attendance-action-form" style="display: inline-flex; gap: 4px;">
+                <input type="hidden" name="worker_id" value="{{ w.id }}">
+                <button type="submit" name="action" value="check_in" class="btn btn-sm btn-secondary" title="Check in worker">
+                  Check In
+                </button>
+                <button type="submit" name="action" value="check_out" class="btn btn-sm btn-secondary" title="Check out worker">
+                  Check Out
+                </button>
+                <button type="submit" name="action" value="absent" class="btn btn-sm btn-danger" title="Mark absent">
+                  Absent
+                </button>
+              </form>
+              <button type="button" 
+                      class="btn btn-sm btn-secondary btn-qr-badge" 
+                      data-worker-id="{{ w.id }}" 
+                      data-worker-name="{{ w.full_name }}" 
+                      data-worker-code="{{ w.employee_code }}" 
+                      data-worker-dept="{{ w.department or 'Operations' }}" 
+                      data-worker-zone="{{ w.work_zone or 'Zone A' }}" 
+                      title="View &amp; Print QR Pass">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                <span>Badge</span>
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7">
+            <div class="empty-state">
+              <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                <path d="m9 14 2 2 4-4"></path>
+              </svg>
+              <div class="empty-state-title">No workers on roster</div>
+              <p class="empty-state-desc">You haven't added any workers yet. Add workers to start taking shift attendance.</p>
+              <a href="{{ url_for('workers') }}" class="btn btn-primary btn-sm">Add Workers</a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Worker QR Badge Printable Modal -->
+<div id="qr-badge-modal" class="modal-backdrop" style="display: none;">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7"></rect>
+          <rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect>
+          <rect x="3" y="14" width="7" height="7"></rect>
+        </svg>
+        <span>Personnel QR Attendance Badge</span>
+      </div>
+      <button type="button" class="btn-close-modal" id="btn-close-qr-modal">&times;</button>
+    </div>
+    
+    <div class="modal-body">
+      <!-- Printable Badge Card -->
+      <div id="printable-id-card" class="printable-badge">
+        <div class="badge-top-banner">
+          <div class="badge-plant-name">H₂S EXPOSURE MONITORING SYSTEM</div>
+          <div class="badge-type">OFFICIAL PERSONNEL PASS</div>
+        </div>
+
+        <div class="badge-card-content">
+          <div class="badge-avatar-wrap">
+            <div id="badge-avatar-initials" class="badge-avatar-circle">EMP</div>
+          </div>
+
+          <div class="badge-worker-info">
+            <h3 id="badge-worker-name" class="badge-name">Worker Name</h3>
+            <div id="badge-worker-code" class="badge-code">EMP-0000</div>
+            <div class="badge-meta-row">
+              <span class="badge-label">Unit:</span>
+              <span id="badge-worker-dept" class="badge-val">Operations</span>
+            </div>
+            <div class="badge-meta-row">
+              <span class="badge-label">Zone:</span>
+              <span id="badge-worker-zone" class="badge-val">Plant Floor</span>
+            </div>
+          </div>
+
+          <div class="badge-qr-section">
+            <div id="modal-qr-container" class="badge-qr-canvas-wrap"></div>
+            <div class="badge-qr-hint">Scan at Attendance Kiosk</div>
+          </div>
+        </div>
+
+        <div class="badge-bottom-banner">
+          <span>Lead Acetate Occupational Safety Compliance</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" id="btn-dismiss-qr-modal">Close</button>
+      <button type="button" class="btn btn-primary" id="btn-print-badge">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+          <rect x="6" y="14" width="12" height="8"></rect>
+        </svg>
+        <span>Print Badge</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

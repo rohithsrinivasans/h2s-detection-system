@@ -1,18 +1,31 @@
 import os
 
+# Base directories
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))
+FRONTEND_DIR = os.path.join(ROOT_DIR, "frontend")
+
+# Ensure frontend fallback if packaged as standalone backend
+if not os.path.exists(FRONTEND_DIR):
+    FRONTEND_DIR = BASE_DIR
 
 
 class Config:
     BASE_DIR = BASE_DIR
-    SECRET_KEY = os.environ.get("SECRET_KEY", "aegis-h2s-industrial-safety-key-2026")
-    SQLALCHEMY_DATABASE_URI = os.environ.get(
-        "DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'h2s_system.db')}"
-    )
+    FRONTEND_DIR = FRONTEND_DIR
+    SECRET_KEY = os.environ.get("SECRET_KEY", "sentry-h2s-production-secret-982341")
+
+    # Render PostgreSQL compatibility fix (Render sets postgres://, SQLAlchemy requires postgresql://)
+    _db_url = os.environ.get("DATABASE_URL")
+    if _db_url and _db_url.startswith("postgres://"):
+        _db_url = _db_url.replace("postgres://", "postgresql://", 1)
+
+    SQLALCHEMY_DATABASE_URI = _db_url or f"sqlite:///{os.path.join(BASE_DIR, 'h2s_system.db')}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    UPLOAD_FOLDER = os.path.join(BASE_DIR, "static", "uploads")
-    SAMPLE_STRIPS_DIR = os.path.join(BASE_DIR, "static", "sample_strips")
+    # Frontend asset directories
+    UPLOAD_FOLDER = os.path.join(FRONTEND_DIR, "static", "uploads")
+    SAMPLE_STRIPS_DIR = os.path.join(FRONTEND_DIR, "static", "sample_strips")
     ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
     # PyTorch Model
@@ -20,10 +33,6 @@ class Config:
     IMG_SIZE = (128, 128)
 
     # Exposure classes in increasing order of severity:
-    #   no_exposure -> unreacted lead acetate (Pb(CH3COO)2), off-white / cream
-    #   low         -> faint tan / yellowish tinge, early discoloration
-    #   medium      -> visible amber / cinnamon brown reaction
-    #   high        -> dark brown / black lead sulfide (PbS) precipitate
     CLASS_NAMES = ["no_exposure", "low", "medium", "high"]
 
     # Calibrated ppm ranges associated with lead acetate colorimetry stages
@@ -48,16 +57,16 @@ class Config:
         "no_exposure": {
             "title": "Normal / Safe Condition",
             "level": "SAFE",
-            "badge_class": "badge-safe",
+            "badge_class": "safe",
             "color": "#10b981",
             "bg_color": "rgba(16, 185, 129, 0.12)",
             "osha_status": "Within ACGIH TLV (≤ 1 ppm)",
-            "recommendation": "Standard operation permitted. Keep indicator strip exposed in breathing zone.",
+            "recommendation": "Standard operation permitted. Maintain continuous monitor wear.",
         },
         "low": {
             "title": "Action Level Detected",
             "level": "CAUTION",
-            "badge_class": "badge-low",
+            "badge_class": "low",
             "color": "#f59e0b",
             "bg_color": "rgba(245, 158, 11, 0.12)",
             "osha_status": "Approaching STEL Limit (1 - 5 ppm)",
@@ -66,7 +75,7 @@ class Config:
         "medium": {
             "title": "Warning: Elevated Exposure",
             "level": "WARNING",
-            "badge_class": "badge-medium",
+            "badge_class": "medium",
             "color": "#f97316",
             "bg_color": "rgba(249, 115, 22, 0.12)",
             "osha_status": "Exceeds 15-min STEL (5 - 15 ppm)",
@@ -75,7 +84,7 @@ class Config:
         "high": {
             "title": "Critical Hazard: High H2S",
             "level": "DANGER",
-            "badge_class": "badge-high",
+            "badge_class": "high",
             "color": "#ef4444",
             "bg_color": "rgba(239, 68, 68, 0.15)",
             "osha_status": "Approaching/Exceeding OSHA Ceiling (> 15 ppm)",

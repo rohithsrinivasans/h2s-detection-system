@@ -49,6 +49,15 @@ class Worker(db.Model):
         "ExposureReading", backref="worker", cascade="all, delete-orphan"
     )
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "employee_code": self.employee_code,
+            "full_name": self.full_name,
+            "department": self.department or "Operations",
+            "work_zone": self.work_zone or "General",
+        }
+
     def __repr__(self):
         return f"<Worker {self.employee_code} {self.full_name}>"
 
@@ -68,6 +77,16 @@ class Attendance(db.Model):
     __table_args__ = (
         db.UniqueConstraint("worker_id", "work_date", name="uq_worker_date"),
     )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "worker_id": self.worker_id,
+            "work_date": self.work_date.isoformat() if self.work_date else None,
+            "check_in": self.check_in.strftime("%H:%M") if self.check_in else None,
+            "check_out": self.check_out.strftime("%H:%M") if self.check_out else None,
+            "status": self.status,
+        }
 
 
 class ExposureReading(db.Model):

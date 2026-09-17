@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — H2S Monitor{% endblock %}
+{% block content %}
+
+<!-- Header & Quick Actions -->
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Safety Overview</h1>
+    <p class="page-subtitle">Daily occupational hydrogen sulfide exposure tracking and worker safety status.</p>
+  </div>
+  <div class="header-actions-group">
+    <a href="{{ url_for('export_csv') }}" class="btn btn-secondary">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      <span>Export CSV</span>
+    </a>
+    <a href="{{ url_for('exposure') }}" class="btn btn-primary">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+        <circle cx="12" cy="13" r="4"></circle>
+      </svg>
+      <span>New Scan</span>
+    </a>
+  </div>
+</div>
+
+<!-- Human Operational Shift Banner -->
+<div class="shift-banner">
+  <div class="shift-banner-left">
+    <div class="pulse-indicator">
+      <span class="pulse-dot"></span>
+    </div>
+    <div>
+      <div class="shift-banner-title">Plant Shift Monitoring Active</div>
+      <div class="shift-banner-sub">Tracking ACGIH 1.0 ppm TWA &amp; OSHA 20.0 ppm Ceiling Limits</div>
+    </div>
+  </div>
+  <div class="shift-banner-badges">
+    <span class="pill-badge pill-calibrated">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+      PbS Colorimetric AI v1.0
+    </span>
+    <span class="pill-badge pill-neutral">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+      Shift Logged
+    </span>
+  </div>
+</div>
+
+<!-- Key Stat Cards -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-top">
+      <span class="label">Total Workers</span>
+      <div class="stat-icon-wrap">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+      </div>
+    </div>
+    <div class="count">{{ total_workers }}</div>
+    <div class="desc">
+      <span>Enrolled in plant roster</span>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-top">
+      <span class="label">Present Today</span>
+      <div class="stat-icon-wrap green">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <polyline points="16 11 18 13 22 9"></polyline>
+        </svg>
+      </div>
+    </div>
+    <div class="count" style="color: var(--safe-fg);">{{ present_today }}</div>
+    <div class="desc">
+      <span>Workers on active shift</span>
+      {% if total_workers > 0 %}
+        <span class="stat-sub-tag">{{ "%.0f"|format(present_today / total_workers * 100) }}%</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-top">
+      <span class="label">Scans Today</span>
+      <div class="stat-icon-wrap">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+          <circle cx="12" cy="13" r="4"></circle>
+        </svg>
+      </div>
+    </div>
+    <div class="count">{{ recent_readings|length }}</div>
+    <div class="desc">
+      <span>Paper strips analyzed</span>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-top">
+      <span class="label">Elevated Alerts</span>
+      <div class="stat-icon-wrap {{ 'red' if high_alerts_today > 0 else ('amber' if alerts_today > 0 else 'green') }}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </div>
+    </div>
+    <div class="count" style="color: {{ 'var(--danger-fg)' if high_alerts_today > 0 else ('var(--caution-fg)' if alerts_today > 0 else 'var(--safe-fg)') }};">
+      {{ alerts_today }}
+    </div>
+    <div class="desc">
+      {% if high_alerts_today > 0 %}
+        <span style="color: var(--danger-fg); font-weight: 600;">{{ high_alerts_today }} critical (&gt;15 ppm)</span>
+      {% elif alerts_today > 0 %}
+        <span style="color: var(--caution-fg); font-weight: 600;">{{ alerts_today }} require monitoring</span>
+      {% else %}
+        <span>Zero hazard excursions</span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Main Content Grid: Recent Scans Table + Charts & Standards -->
+<div class="layout-2col">
+  <!-- Recent Scans Table -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-title">Recent Exposure Scans</div>
+      <a href="{{ url_for('exposure') }}" style="font-size: 12.5px; color: var(--primary); text-decoration: none; font-weight: 500;">Run scan &rarr;</a>
+    </div>
+    
+    <div class="table-responsive">
+      <table class="clean-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Worker</th>
+            <th>Result</th>
+            <th>Concentration</th>
+            <th>Photo</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in recent_readings %}
+          <tr>
+            <td>
+              <span style="font-size: 12px; color: var(--text-muted);">{{ r.timestamp.strftime('%H:%M') }}</span>
+            </td>
+            <td>
+              <div class="user-cell">
+                <div class="avatar-circle-sm">
+                  {{ r.worker.full_name[:2].upper() }}
+                </div>
+                <div>
+                  <div style="font-weight: 600; font-size: 13.5px; color: var(--text-main);">{{ r.worker.full_name }}</div>
+                  <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                    <code>{{ r.worker.employee_code }}</code>
+                    <span>•</span>
+                    <span>{{ r.worker.department or 'Operations' }}</span>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td>
+              {% if r.predicted_class == 'no_exposure' %}
+                <span class="badge badge-safe"><span class="badge-dot"></span> Safe</span>
+              {% elif r.predicted_class == 'low' %}
+                <span class="badge badge-low"><span class="badge-dot"></span> Low</span>
+              {% elif r.predicted_class == 'medium' %}
+                <span class="badge badge-medium"><span class="badge-dot"></span> Warning</span>
+              {% else %}
+                <span class="badge badge-high"><span class="badge-dot"></span> Danger</span>
+              {% endif %}
+            </td>
+            <td>
+              <strong>{{ r.ppm_estimate_low }}{% if r.ppm_estimate_high %} – {{ r.ppm_estimate_high }}{% else %}+{% endif %} ppm</strong>
+            </td>
+            <td>
+              {% if r.image_path %}
+                <a href="{{ url_for('static', filename=r.image_path) }}" target="_blank" class="btn btn-sm btn-secondary">
+                  View
+                </a>
+              {% else %}
+                <span style="color: var(--text-muted); font-size: 11px;">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5">
+              <div class="empty-state">
+                <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                  <circle cx="12" cy="13" r="4"></circle>
+                </svg>
+                <div class="empty-state-title">No scans recorded today</div>
+                <p class="empty-state-desc">Capture or upload a photo of a worker's lead acetate strip to measure H₂S exposure.</p>
+                <a href="{{ url_for('exposure') }}" class="btn btn-primary btn-sm">Scan First Strip</a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Right Column: Chart & Safety Thresholds -->
+  <div>
+    <!-- Hourly Activity Chart -->
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="card-header">
+        <div class="card-header-title">Today's Inspection Activity</div>
+        <span style="font-size: 11px; color: var(--text-muted);">Hourly count</span>
+      </div>
+      <div class="card-body">
+        <div style="position: relative; height: 180px; width: 100%;">
+          <canvas id="hourlyTrendChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Regulatory Limits -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-title">Occupational Exposure Limits</div>
+        <span style="font-size: 11px; color: var(--text-muted);">OSHA &amp; ACGIH</span>
+      </div>
+      <div class="card-body" style="padding: 16px;">
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+            <div>
+              <div style="font-weight: 600; font-size: 13px;">ACGIH TLV-TWA</div>
+              <div style="font-size: 11.5px; color: var(--text-muted);">8-hour daily exposure limit</div>
+            </div>
+            <strong style="color: var(--safe-fg); font-size: 14px;">1.0 ppm</strong>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
+            <div>
+              <div style="font-weight: 600; font-size: 13px;">ACGIH STEL</div>
+              <div style="font-size: 11.5px; color: var(--text-muted);">15-minute short term limit</div>
+            </div>
+            <strong style="color: var(--caution-fg); font-size: 14px;">5.0 ppm</strong>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 600; font-size: 13px;">OSHA Ceiling</div>
+              <div style="font-size: 11.5px; color: var(--text-muted);">Must not be exceeded at any time</div>
+            </div>
+            <strong style="color: var(--danger-fg); font-size: 14px;">20.0 ppm</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+{% block title %}Scan Test Strip — H2S Monitor{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Scan Indicator Strip</h1>
+    <p class="page-subtitle">Inspect lead acetate (Pb(CH₃COO)₂) detection paper to classify H₂S darkening stage.</p>
+  </div>
+</div>
+
+<div class="layout-2col">
+  <!-- Left Column: Input & Capture -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-title">Paper Strip Photo</div>
+      <div style="display: flex; gap: 4px;">
+        <button type="button" id="tab-file" class="btn btn-sm btn-secondary active">Upload File</button>
+        <button type="button" id="tab-camera" class="btn btn-sm btn-secondary">Use Camera</button>
+      </div>
+    </div>
+
+    <div class="card-body">
+      <!-- Worker Assignment -->
+      <div class="form-group">
+        <label class="form-label" for="worker-select">Select Worker</label>
+        {% if workers %}
+          <select id="worker-select" name="worker_id" class="form-select">
+            {% for w in workers %}
+              <option value="{{ w.id }}" {{ 'selected' if (selected_worker_id and selected_worker_id == w.id) or loop.first }}>
+                {{ w.full_name }} ({{ w.employee_code }}) — {{ w.department or 'Operations' }}
+              </option>
+            {% endfor %}
+          </select>
+        {% else %}
+          <div style="background: var(--subtle-bg); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px; font-size: 13px; color: var(--text-secondary);">
+            No workers enrolled yet. <a href="{{ url_for('workers') }}" style="color: var(--primary); font-weight: 600;">Add a worker</a> before logging readings.
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Option 1: File Upload (Default) -->
+      <div id="file-view-container">
+        <form id="exposure-form" method="POST" enctype="multipart/form-data">
+          <input type="hidden" name="worker_id" id="hidden-worker-id" value="{{ workers[0].id if workers else '1' }}">
+          <input type="file" id="strip-file-input" name="photo" accept="image/*" style="display: none;">
+          <input type="file" id="strip-camera-direct" accept="image/*" capture="environment" style="display: none;">
+
+          <div id="upload-dropzone" class="upload-dropzone">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-light)" stroke-width="1.8" style="margin: 0 auto 8px;">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <div id="dropzone-text" style="font-size: 14px; font-weight: 600; color: var(--text-main);">
+              Click to choose a photo, or drag and drop
+            </div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+              Supports photos from smartphones, webcams, or lab cameras (JPG, PNG, WEBP)
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button type="button" id="btn-browse-file" class="btn btn-secondary btn-sm" style="flex: 1;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              <span>Browse File</span>
+            </button>
+            <button type="button" id="btn-device-snap" class="btn btn-secondary btn-sm" style="flex: 1;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="13" r="4"></circle>
+              </svg>
+              <span>Snap on Mobile</span>
+            </button>
+          </div>
+
+          <div id="preview-wrapper" class="upload-preview-box">
+            <img id="selected-file-preview" alt="Selected paper strip">
+          </div>
+
+          <button type="submit" id="btn-submit-analyze" class="btn btn-primary btn-block" style="margin-top: 16px; padding: 10px;" {{ 'disabled' if not workers else '' }}>
+            Analyze Test Strip
+          </button>
+        </form>
+      </div>
+
+      <!-- Option 2: Live Camera Feed -->
+      <div id="camera-view-container" style="display: none;">
+        <!-- Camera Device Selector (shown when multiple cameras exist) -->
+        <div id="camera-select-wrap" style="display: none; margin-bottom: 10px;">
+          <label class="form-label" for="camera-device-select" style="font-size: 11.5px; margin-bottom: 4px;">Select Camera Device</label>
+          <select id="camera-device-select" class="form-select" style="font-size: 12.5px; padding: 6px 10px;"></select>
+        </div>
+
+        <div class="camera-box" id="camera-box">
+          <video id="camera-video" autoplay playsinline muted></video>
+          <div class="camera-guide-box" id="camera-guide" style="display: none;"></div>
+
+          <!-- State Overlay (Idle, Connecting, Error) -->
+          <div class="camera-overlay-state" id="camera-overlay-state">
+            <div class="camera-state-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="13" r="4"></circle>
+              </svg>
+            </div>
+            <div class="camera-state-title" id="camera-state-title">Camera Feed Ready</div>
+            <div class="camera-state-desc" id="camera-state-desc">Click "Start Camera" to begin live optical inspection.</div>
+            <button type="button" id="btn-camera-inline-start" class="btn btn-sm btn-primary" style="margin-top: 12px;">
+              Start Camera
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Status indicator -->
+        <div id="camera-live-badge" style="display: none; margin-top: 8px; font-size: 11.5px; color: var(--safe-fg); align-items: center; gap: 6px;">
+          <span class="pulse-dot"></span>
+          <span id="camera-res-text">Live Video Stream Connected</span>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 12px;">
+          <button type="button" id="btn-toggle-camera" class="btn btn-secondary btn-sm" style="flex: 1;">
+            Start Camera
+          </button>
+          <button type="button" id="btn-capture-frame" class="btn btn-primary btn-sm" style="flex: 1.2;" {{ 'disabled' if not workers else '' }}>
+            Take Photo &amp; Analyze
+          </button>
+        </div>
+      </div>
+
+      <!-- Subtle Test Sample Helper -->
+      <div class="test-samples-section">
+        <div class="test-samples-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+          <span>Quick Lab Presets (Calibrated Reference Strips)</span>
+        </div>
+        
+        <div class="sample-strips-tray">
+          <button type="button" class="sample-chip strip-item-card" data-class="no_exposure" data-image-url="{{ url_for('static', filename='sample_strips/sample_no_exposure.jpg') }}" title="Click to test Fresh Paper (0 ppm)">
+            <span class="sample-swatch swatch-fresh"></span>
+            <div class="sample-chip-info">
+              <span class="sample-chip-name">Fresh Paper</span>
+              <span class="sample-chip-ppm">0 ppm • Safe</span>
+            </div>
+          </button>
+
+          <button type="button" class="sample-chip strip-item-card" data-class="low" data-image-url="{{ url_for('static', filename='sample_strips/sample_low.jpg') }}" title="Click to test Faint Tan (2 ppm)">
+            <span class="sample-swatch swatch-low"></span>
+            <div class="sample-chip-info">
+              <span class="sample-chip-name">Faint Tan</span>
+              <span class="sample-chip-ppm">2 ppm • Action</span>
+            </div>
+          </button>
+
+          <button type="button" class="sample-chip strip-item-card" data-class="medium" data-image-url="{{ url_for('static', filename='sample_strips/sample_medium.jpg') }}" title="Click to test Amber Brown (8 ppm)">
+            <span class="sample-swatch swatch-medium"></span>
+            <div class="sample-chip-info">
+              <span class="sample-chip-name">Amber Brown</span>
+              <span class="sample-chip-ppm">8 ppm • Warning</span>
+            </div>
+          </button>
+
+          <button type="button" class="sample-chip strip-item-card" data-class="high" data-image-url="{{ url_for('static', filename='sample_strips/sample_high.jpg') }}" title="Click to test Black Lead Sulfide (>15 ppm)">
+            <span class="sample-swatch swatch-high"></span>
+            <div class="sample-chip-info">
+              <span class="sample-chip-name">Lead Sulfide</span>
+              <span class="sample-chip-ppm">&gt;15 ppm • Danger</span>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Result Card -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 14 14"></polyline>
+        </svg>
+        <span>Colorimetric Analysis Result</span>
+      </div>
+      <span class="badge badge-safe" style="font-size: 11px;">Model Ready</span>
+    </div>
+    <div class="card-body">
+      <div id="ai-result-panel">
+        <div class="empty-state" style="padding: 36px 16px;">
+          <div class="empty-state-visual">
+            <svg class="empty-state-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+              <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+          </div>
+          <div class="empty-state-title">Awaiting Indicator Strip</div>
+          <p class="empty-state-desc">Choose a worker and upload or capture an exposed paper strip. The optical CNN evaluates lead acetate darkening in milliseconds.</p>
+          
+          <div class="inspection-tips">
+            <div class="tip-item">
+              <span class="tip-num">1</span>
+              <span>Keep strip flat under even white light</span>
+            </div>
+            <div class="tip-item">
+              <span class="tip-num">2</span>
+              <span>Ensure center of paper is clearly focused</span>
+            </div>
+            <div class="tip-item">
+              <span class="tip-num">3</span>
+              <span>Compare against OSHA 1.0 ppm TWA standard</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Worker's Logged Exposure History -->
+{% if history %}
+<div class="card">
+  <div class="card-header">
+    <div class="card-header-title">Today's Scans for Selected Worker</div>
+  </div>
+  <div class="table-responsive">
+    <table class="clean-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Result</th>
+          <th>Concentration</th>
+          <th>Confidence</th>
+          <th>Image</th>
+        </tr>
+      </thead>
+      <tbody id="reading-history-tbody">
+        {% for r in history %}
+        <tr>
+          <td><span style="color: var(--text-muted);">{{ r.timestamp.strftime('%H:%M') }}</span></td>
+          <td>
+            {% if r.predicted_class == 'no_exposure' %}
+              <span class="badge badge-safe"><span class="badge-dot"></span> Safe</span>
+            {% elif r.predicted_class == 'low' %}
+              <span class="badge badge-low"><span class="badge-dot"></span> Low</span>
+            {% elif r.predicted_class == 'medium' %}
+              <span class="badge badge-medium"><span class="badge-dot"></span> Warning</span>
+            {% else %}
+              <span class="badge badge-high"><span class="badge-dot"></span> Danger</span>
+            {% endif %}
+          </td>
+          <td><strong>{{ r.ppm_estimate_low }}{% if r.ppm_estimate_high %} – {{ r.ppm_estimate_high }}{% else %}+{% endif %} ppm</strong></td>
+          <td>{{ "%.0f"|format((r.confidence or 0.95) * 100) }}%</td>
+          <td>
+            {% if r.image_path %}
+              <a href="{{ url_for('static', filename=r.image_path) }}" target="_blank" class="btn btn-sm btn-secondary">View</a>
+            {% else %}
+              <span style="color: var(--text-muted); font-size: 11px;">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<script>
+document.getElementById("worker-select")?.addEventListener("change", function() {
+  const hiddenId = document.getElementById("hidden-worker-id");
+  if (hiddenId) hiddenId.value = this.value;
+});
+</script>
+
+{% endblock %}
